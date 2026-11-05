@@ -95,4 +95,4 @@ EXPOSE 8000
 
 # Production ASGI startup (not the dev run.py reload server). The API/worker
 # Compose services override this command; workers import-check separately.
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

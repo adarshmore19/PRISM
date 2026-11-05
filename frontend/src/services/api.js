@@ -2,11 +2,15 @@
 import axios from 'axios';
 import { getAccessToken, supabase } from '../lib/supabase/client';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+// Normalize so API calls always route to /api/v1, while root operations (health/metrics) route to the root
+const API_BASE_URL = rawBase
+  ? (rawBase.endsWith('/api/v1') ? rawBase : `${rawBase}/api/v1`)
+  : '/api/v1';
 const API_ROOT_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || '/';
 
 export const api = axios.create({
-  baseURL: API_BASE_URL.replace(/\/$/, ''),
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: { Accept: 'application/json' },
 });
