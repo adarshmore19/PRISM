@@ -87,18 +87,20 @@ app.include_router(api_router, prefix="/api/v1")
 # BE-020 operational endpoints (liveness/readiness/metrics).
 # ---------------------------------------------------------------------------
 @app.get("/health", summary="Liveness probe (process alive, dependency-agnostic)")
+@app.get("/healthz", summary="Liveness probe (process alive, dependency-agnostic)")
 async def liveness():
     details, status_code = liveness_endpoint()
     return JSONResponse(content=details, status_code=status_code)
 
 
 @app.get("/ready", summary="Readiness probe (required dependencies available)")
+@app.get("/readyz", summary="Readiness probe (required dependencies available)")
 async def readiness():
     details, status_code = readiness_endpoint()
     return JSONResponse(content=details, status_code=status_code)
 
 
-@app.get("/healthz", summary="Combined liveness + readiness snapshot")
+@app.get("/status", summary="Combined liveness + readiness snapshot")
 async def combined_health():
     details, status_code = health_endpoint()
     return JSONResponse(content=details, status_code=status_code)

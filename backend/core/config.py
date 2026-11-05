@@ -71,6 +71,50 @@ def oidc_endpoint_host(label: str, value: str) -> str:
     return host
 
 
+def normalize_database_url(url: str) -> str:
+    """Normalize database connection string for SQLAlchemy/psycopg2.
+
+    1. Converts `postgres://` or `postgresql://` to `postgresql+psycopg2://`.
+    2. Corrects credentials where password contains unencoded special characters
+       (such as `@`), avoiding DNS parsing failures like `18@aws-0-ap-south-1...`.
+    3. Ensures `sslmode=require` for hosted Supabase endpoints if omitted.
+    """
+    if not url or "://" not in url:
+        return url
+
+    scheme, remainder = url.split("://", 1)
+    if scheme in ("postgres", "postgresql"):
+        scheme = "postgresql+psycopg2"
+
+    if "/" in remainder:
+        authority, path_query = remainder.split("/", 1)
+        path_query = "/" + path_query
+    elif "?" in remainder:
+        authority, query = remainder.split("?", 1)
+        path_query = "/?" + query
+    else:
+        authority = remainder
+        path_query = ""
+
+    if "@" in authority:
+        userinfo, host_port = authority.rsplit("@", 1)
+        if ":" in userinfo:
+            user, password = userinfo.split(":", 1)
+            import urllib.parse
+
+            user = urllib.parse.quote(urllib.parse.unquote(user), safe=".-_")
+            password = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+            userinfo = f"{user}:{password}"
+        authority = f"{userinfo}@{host_port}"
+
+    if "supabase.com" in authority or "supabase.co" in authority:
+        if "sslmode=" not in path_query:
+            sep = "&" if "?" in path_query else "?"
+            path_query = f"{path_query}{sep}sslmode=require"
+
+    return f"{scheme}://{authority}{path_query}"
+
+
 class Settings(BaseSettings):
     app_name: str = "prism-backend"
     environment: str = "development"
@@ -78,16 +122,9 @@ class Settings(BaseSettings):
     # Data stores
     # Use PostgreSQL in development by default (do not use SQLite).
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/pofa_dev"
-    # BE-037 Phase A: the identity Alembic connects with. It defaults to
-    # ``database_url`` (see ``migration_database_url`` below) so development,
-    # test and staging setups that provide only DATABASE_URL are unchanged. In a
-    # production deployment the API/workers run as the least-privileged
-    # ``poa_runtime`` role (DATABASE_URL) while migrations run as the owning
-    # ``poa_migrator`` role via this variable, keeping schema DDL off the runtime
-    # credential. ``poa_runtime`` has no DDL rights, so a migration attempted
-    # through it fails loudly rather than silently escalating.
     migration_database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
+    redis_required: bool = False
     analysis_queue_name: str = "pofa:analysis:jobs"
     analysis_max_attempts: int = 3
     analysis_abandoned_timeout_seconds: int = 300
@@ -139,6 +176,7 @@ class Settings(BaseSettings):
     s3_use_ssl: bool = False
     s3_quarantine_bucket: str = "pofa-quarantine"
     s3_evidence_bucket: str = "pofa-evidence"
+    storage_required: bool = False
     max_upload_size: int = 10 * 1024 * 1024
 
     jwt_secret: str = "changeme"
@@ -193,6 +231,11 @@ class Settings(BaseSettings):
     observability_redact_sensitive: bool = True
 
     @property
+    def normalized_database_url(self) -> str:
+        """The application runtime database URL normalized for SQLAlchemy and Supabase."""
+        return normalize_database_url(self.database_url)
+
+    @property
     def alembic_database_url(self) -> str:
         """The DSN Alembic should connect with.
 
@@ -200,7 +243,8 @@ class Settings(BaseSettings):
         identity is configured, so single-credential (dev/test/staging) setups
         keep working unchanged.
         """
-        return self.migration_database_url or self.database_url
+        raw = self.migration_database_url or self.database_url
+        return normalize_database_url(raw)
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 
-from backend.core.config import settings
+from backend.core.config import normalize_database_url, settings
 from backend.db import safety
 
 
@@ -33,6 +33,7 @@ def build_guarded_engine(database_url: str) -> Engine:
     ``create_engine``: normal application, worker and Alembic startup see no
     extra checks and no behaviour change.
     """
+    database_url = normalize_database_url(database_url)
     context = safety.current_context()
     # A declared context means writes are only allowed against the database
     # that context named. Confirm it against the server before handing out an

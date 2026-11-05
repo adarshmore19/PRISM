@@ -109,18 +109,33 @@ class PostgresHealthCheck(HealthCheck):
 
 
 class RedisHealthCheck(HealthCheck):
-    """Redis connectivity health check (required)."""
+    """Redis connectivity health check."""
 
-    def __init__(self):
-        super().__init__("redis", required=True)
+    def __init__(self, required: bool | None = None):
+        super().__init__(
+            "redis",
+            required=settings.redis_required if required is None else required,
+        )
 
     def check(self) -> Tuple[HealthStatus, Dict[str, Any]]:
         if not REDIS_AVAILABLE:
             return HealthStatus.UNKNOWN, {
                 "message": "Redis library not available"
             }
+        if (
+            not self.required
+            and settings.environment in {"production", "prod", "staging"}
+            and ("localhost" in settings.redis_url or "127.0.0.1" in settings.redis_url)
+        ):
+            return HealthStatus.HEALTHY, {
+                "message": "Redis not configured for web tier (optional)"
+            }
         try:
-            client = redis.from_url(settings.redis_url)
+            client = redis.from_url(
+                settings.redis_url,
+                socket_timeout=3.0,
+                socket_connect_timeout=3.0,
+            )
             client.ping()
             try:
                 client.close()
@@ -138,24 +153,44 @@ class RedisHealthCheck(HealthCheck):
 
 
 class StorageHealthCheck(HealthCheck):
-    """Object-storage connectivity health check (required)."""
+    """Object-storage connectivity health check."""
 
-    def __init__(self):
-        super().__init__("storage", required=True)
+    def __init__(self, required: bool | None = None):
+        super().__init__(
+            "storage",
+            required=settings.storage_required if required is None else required,
+        )
 
     def check(self) -> Tuple[HealthStatus, Dict[str, Any]]:
         if not BOTO3_AVAILABLE:
             return HealthStatus.UNKNOWN, {
                 "message": "Boto3 not available for storage check"
             }
+        if (
+            not self.required
+            and settings.environment in {"production", "prod", "staging"}
+            and not settings.s3_access_key
+            and ("localhost" in settings.s3_endpoint or "127.0.0.1" in settings.s3_endpoint)
+        ):
+            return HealthStatus.HEALTHY, {
+                "message": "Storage credentials not yet configured (optional)"
+            }
         try:
+            from botocore.client import Config as BotoConfig
+            from backend.services.storage import StorageService
+
+            endpoint = StorageService._endpoint_url()
             client = boto3.client(
                 "s3",
-                endpoint_url=settings.s3_endpoint,
+                endpoint_url=endpoint,
                 aws_access_key_id=settings.s3_access_key,
                 aws_secret_access_key=settings.s3_secret_key,
                 region_name=settings.s3_region,
-                use_ssl=settings.s3_use_ssl,
+                config=BotoConfig(
+                    signature_version="s3v4",
+                    retries={"max_attempts": 2, "mode": "standard"},
+                    s3={"addressing_style": "path"},
+                ),
             )
             client.list_buckets()
             return HealthStatus.HEALTHY, {

@@ -1,6 +1,7 @@
 import { getAccessToken, supabase } from '../supabase/client';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+const API_BASE_URL = rawBase || '';
 
 export class ApiError extends Error {
   constructor(category, message, status = 0, details = null) {

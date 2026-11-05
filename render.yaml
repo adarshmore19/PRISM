@@ -5,10 +5,12 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     region: oregon
-    healthCheckPath: /health
+    healthCheckPath: /healthz
     envVars:
       - key: ENVIRONMENT
         value: staging
+      - key: RUN_MIGRATIONS
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ALLOW_ORIGINS
@@ -31,3 +33,23 @@ services:
         value: ES256,RS256
       - key: AUTH_OIDC_IDENTITY_PROVIDER
         value: supabase
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_REQUIRED
+        value: "false"
+      - key: S3_ENDPOINT
+        value: https://tuaeujvuuanadqvykugw.supabase.co/storage/v1/s3
+      - key: S3_REGION
+        value: ap-south-1
+      - key: S3_USE_SSL
+        value: "true"
+      - key: S3_QUARANTINE_BUCKET
+        value: pofa-quarantine
+      - key: S3_EVIDENCE_BUCKET
+        value: pofa-evidence
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: STORAGE_REQUIRED
+        value: "false"

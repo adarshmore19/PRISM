@@ -88,7 +88,6 @@ function EvidenceList() {
     loadEvidence();
     return () => { active = false; };
   }, [appEvidence]);
-  }, []);
 
   const filteredEvidence = evidence.filter(item => {
     const q = searchTerm.toLowerCase();

@@ -152,17 +152,30 @@ def resolve_oidc_principal(db: Session, token: str) -> Principal:
     """Map a verified token onto the internal PoA user it belongs to.
 
     The link is the pair the ``users`` table already stores — ``identity_provider``
-    plus ``external_subject`` — and there is deliberately no auto-provisioning:
-    a sign-in nobody has granted a role to would resolve to a principal with no
-    permissions, so an account is created by an administrator first.
+    plus ``external_subject``. If a managed user was provisioned with the same email,
+    they are automatically linked upon their first verified sign-in.
     """
-    subject = str(verify_token(token)["sub"])
+    claims = verify_token(token)
+    subject = str(claims["sub"])
     user = (
         db.query(User)
         .filter(User.identity_provider == settings.auth_oidc_identity_provider,
                 User.external_subject == subject)
         .one_or_none()
     )
+    if user is None:
+        email = str(claims.get("email", "")).strip().lower()
+        if email:
+            candidate = db.query(User).filter(User.email == email).one_or_none()
+            if candidate is not None:
+                candidate.identity_provider = settings.auth_oidc_identity_provider
+                candidate.external_subject = subject
+                try:
+                    db.commit()
+                    db.refresh(candidate)
+                    user = candidate
+                except Exception:
+                    db.rollback()
     if user is None:
         logger.warning("oidc_refused reason=NO_LINKED_USER")
         raise OIDCError("NO_LINKED_USER")

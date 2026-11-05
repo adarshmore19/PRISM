@@ -88,11 +88,11 @@ COPY . .
 # writable scratch space must be mounted explicitly.
 RUN groupadd --system --gid 10001 appgroup \
     && useradd --system --uid 10001 --gid appgroup --no-create-home appuser \
+    && chmod +x /app/scripts/start.sh \
     && chown -R root:root /app
 USER appuser
 
 EXPOSE 8000
 
-# Production ASGI startup (not the dev run.py reload server). The API/worker
-# Compose services override this command; workers import-check separately.
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Production ASGI startup (runs start.sh which handles migrations and dynamic port binding)
+CMD ["/app/scripts/start.sh"]
